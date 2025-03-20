@@ -1,0 +1,51 @@
+##fileformat=VCFv4.3
+##FILTER=<ID=PASS,Description="All filters passed">
+##fileDate=20250306
+##source=ngs-data.ru
+##reference=hg38
+##ALT=<ID=*,Description="Represents allele(s) other than observed.">
+##contig=<ID=chr1,length=248956422>
+##contig=<ID=chr2,length=242193529>
+##contig=<ID=chr3,length=198295559>
+##contig=<ID=chr4,length=190214555>
+##contig=<ID=chr5,length=181538259>
+##contig=<ID=chr6,length=170805979>
+##contig=<ID=chr7,length=159345973>
+##contig=<ID=chr8,length=145138636>
+##contig=<ID=chr9,length=138394717>
+##contig=<ID=chr10,length=133797422>
+##contig=<ID=chr11,length=135086622>
+##contig=<ID=chr12,length=133275309>
+##contig=<ID=chr13,length=114364328>
+##contig=<ID=chr14,length=107043718>
+##contig=<ID=chr15,length=101991189>
+##contig=<ID=chr16,length=90338345>
+##contig=<ID=chr17,length=83257441>
+##contig=<ID=chr18,length=80373285>
+##contig=<ID=chr19,length=58617616>
+##contig=<ID=chr20,length=64444167>
+##contig=<ID=chr21,length=46709983>
+##contig=<ID=chr22,length=50818468>
+##contig=<ID=chrX,length=156040895>
+##contig=<ID=chrY,length=57227415>
+##contig=<ID=chrM,length=16569>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##bcftools_viewVersion=1.11+htslib-1.11-4
+##bcftools_viewCommand=view Saushev/hg38/vcf/filtered.vcf; Date=Thu Mar  6 16:51:11 2025
+##bcftools_filterVersion=1.11+htslib-1.11-4
+##bcftools_filterCommand=filter -e ALT=="*" -Oz Saushev/hg38/vcf/filtered.vcf.gz; Date=Thu Mar  6 16:51:12 2025
+##bcftools_viewCommand=view Saushev/hg38/vcf/filter_alt_stars.vcf.gz; Date=Thu Mar  6 16:51:12 2025
+##bcftools_annotateVersion=1.11+htslib-1.11-4
+##bcftools_annotateCommand=annotate -xINFO,FORMAT,FILTER; Date=Thu Mar  6 16:51:12 2025
+##bcftools_viewCommand=view -Ov -R /home/nik/data/NGS/spliceai/annotations/gencode.v43.canonical.txt.gz.bed Saushev/hg38/vcf/vcf_no_info.vcf.gz; Date=Thu Mar  6 16:51:13 2025
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SAMPLE
+chr1	9726972	chr1:9726972:G:A	G	A	100	.	.	GT	0/1
+chr1	11992660	chr1:11992660:G:A	G	A	100	.	.	GT	0/1
+chr1	12341840	chr1:12341840:C:T	C	T	100	.	.	GT	0/1
+chr1	12348909	chr1:12348909:C:T	C	T	100	.	.	GT	0/1
+chr1	12461455	chr1:12461455:C:G	C	G	100	.	.	GT	0/1
+chr1	26795056	chr1:26795056:C:A	C	A	100	.	.	GT	0/1
+chr1	26795188	chr1:26795188:A:C	A	C	100	.	.	GT	0/1
+chr1	30933339	chr1:30933339:G:A	G	A	100	.	.	GT	0/1
+chr1	32810994	chr1:32810994:C:T	C	T	100	.	.	GT	0/1
+chr1	32810994	chr1:32810994:C:T	C	T	100	.	.	GT	0/1

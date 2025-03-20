@@ -161,12 +161,12 @@ class FixedPositionalEmbedding(nn.Module):
 
 
 def activation_func(activation):
-    return nn.ModuleDict([
-        ['relu', nn.ReLU(inplace=True)],
-        ['leaky_relu', nn.LeakyReLU(negative_slope=0.01, inplace=True)],
-        ['selu', nn.SELU(inplace=True)],
-        ['none', nn.Identity()]
-    ])[activation]
+    return nn.ModuleDict({
+        'relu': nn.ReLU(inplace=True),
+        'leaky_relu': nn.LeakyReLU(negative_slope=0.01, inplace=True),
+        'selu': nn.SELU(inplace=True),
+        'none': nn.Identity()
+    })[activation]
 
 
 class ResidualBlock(nn.Module):
@@ -233,10 +233,8 @@ class SpliceAI(nn.Module):
         for i, residualUnit in enumerate(self.res_layers):
             x = residualUnit(x)
             skip += self.skip_layers[i + 1](x)
-            # skip = torch.cat([skip,self.skip_layers[i+1](x)],axis=1)
 
         x_skip = skip[:, :, :]
-        # x_cropped = skip[:,:,self.CL_max//2:-self.CL_max//2]
         return x_skip
 
 
@@ -252,7 +250,6 @@ class SpliceFormer(nn.Module):
         self.returnFmap = returnFmap
         self.SpliceAI = SpliceAI(CL_max, bn_momentum=bn_momentum).apply(keras_init)
         self.conv_final = nn.Conv1d(in_channels=self.n_channels, out_channels=3, kernel_size=self.kernel_size, stride=1)
-        # self.n_transformer_blocks = n_transformer_blocks
         self.maxSeqLength = maxSeqLength
         self.policy = Policy(n_channels=n_channels)
         self.determenistic = determenistic
@@ -262,13 +259,10 @@ class SpliceFormer(nn.Module):
         self.transformerBlocks = nn.ModuleList(
             [Transformer(self.n_channels, depth=depth, heads=heads, dim_head=dim_head, mlp_dim=mlp_dim, dropout=dropout)
              for i in range(n_transformer_blocks)])
-        # self.transformerBlocks = nn.ModuleList([SpliceFormerBlock(n_channels=n_channels,maxSeqLength=maxSeqLength,depth=depth,heads=heads,dim_head=dim_head,mlp_dim=mlp_dim,dropout=dropout,sampleFromGumbel=sampleFromGumbel,gumbel_scale=gumbel_scale) for i in range(n_transformer_blocks)])
 
     def forward(self, features):
         state = self.SpliceAI(features)
-        # print(state.shape)
         m_1 = nn.Softmax(dim=1)
-        # out1 = m_1(self.conv_final(x))
 
         actions, acceptor_actions, donor_actions, acceptor_log_probs, donor_log_probs = self.select_action(state)
 
@@ -285,7 +279,7 @@ class SpliceFormer(nn.Module):
         if self.returnFmap:
             return out, acceptor_actions, donor_actions, acceptor_log_probs, donor_log_probs, skip[:, :,
                                                                                               (self.CL_max // 2):-(
-                                                                                                          self.CL_max // 2)]
+                                                                                                      self.CL_max // 2)]
         else:
             return out, acceptor_actions, donor_actions, acceptor_log_probs, donor_log_probs
 
@@ -298,9 +292,6 @@ class SpliceFormer(nn.Module):
         acceptor_log_probs = []
         donor_log_probs = []
         if self.determenistic:
-            # log_probs, actions = torch.topk(policy_logits, self.maxSeqLength, dim=1, largest=True, sorted=False)
-            # return actions.unsqueeze(2).repeat(1,1,self.n_channels), log_probs
-            # for i in range(self.maxSeqLength//2):
             acceptor_logits = policy_logits[:, :, 0]
             donor_logits = policy_logits[:, :, 1]
             acceptor_order = torch.argsort(torch.argsort(acceptor_logits, dim=1), dim=1)
@@ -314,20 +305,6 @@ class SpliceFormer(nn.Module):
             actions = torch.cat([acceptor_actions, donor_actions], dim=1)
             return actions.unsqueeze(2).repeat(1, 1,
                                                self.n_channels), acceptor_actions, donor_actions, acceptor_log_probs, donor_log_probs
-            # acceptor_log_probs, acceptor_actions = torch.topk(policy_logits[:,:,0], self.maxSeqLength//2, dim=1, largest=True, sorted=False)
-            # donor_log_probs, donor_actions = torch.topk(policy_logits[:,:,1], self.maxSeqLength//2, dim=1, largest=True, sorted=False)
-            # log_prob,action = torch.max(policy_logits[:,:,0]-1e5*c,dim=1)
-            # acceptor_log_probs.append(log_prob.unsqueeze(1))
-            # actions.append(action.unsqueeze(1))
-            # acceptor_actions.append(action.unsqueeze(1))
-            # c[torch.arange(c.size(0), dtype=torch.long),action] = 1
-            # log_prob,action = torch.max(policy_logits[:,:,1]-1e5*c,dim=1)
-            # donor_log_probs.append(log_prob.unsqueeze(1))
-            # actions.append(action.unsqueeze(1))
-            # donor_actions.append(action.unsqueeze(1))
-            # c[torch.arange(c.size(0), dtype=torch.long),action] = 1
-            # actions = torch.cat([acceptor_actions,donor_actions],dim=1)
-            # return actions.unsqueeze(2).repeat(1,1,self.n_channels),acceptor_actions,donor_actions,acceptor_log_probs,donor_log_probs
         else:
             for i in range(self.maxSeqLength // 2):
                 m = torch.distributions.Categorical(
@@ -359,7 +336,6 @@ class SpliceAI_10K(nn.Module):
         self.res_W = [11, 11, 21, 41]
         res_dilation = [1, 4, 10, 25]
         self.kernel_size = 1
-        # self.res_kernel_size = 11
         self.conv_layer_1 = nn.Conv1d(in_channels=4, out_channels=n_channels, kernel_size=self.kernel_size, stride=1)
         self.skip_layers = nn.ModuleList(
             [nn.Conv1d(in_channels=n_channels, out_channels=n_channels, kernel_size=self.kernel_size, stride=1) for i in
@@ -376,7 +352,6 @@ class SpliceAI_10K(nn.Module):
         for i, residualUnit in enumerate(self.res_layers):
             x = residualUnit(x)
             skip += self.skip_layers[i + 1](x)
-            # skip = torch.cat([skip,self.skip_layers[i+1](x)],axis=1)
 
         x = skip[:, :, self.CL_max // 2:-self.CL_max // 2]
         x = self.conv_final(x)
@@ -392,7 +367,6 @@ class SpliceAI_small(nn.Module):
         self.res_W = [11]
         res_dilation = [1]
         self.kernel_size = 1
-        # self.res_kernel_size = 11
         self.conv_layer_1 = nn.Conv1d(in_channels=4, out_channels=n_channels, kernel_size=self.kernel_size, stride=1)
         self.skip_layers = nn.ModuleList(
             [nn.Conv1d(in_channels=n_channels, out_channels=n_channels, kernel_size=self.kernel_size, stride=1) for i in
@@ -409,11 +383,7 @@ class SpliceAI_small(nn.Module):
         for i, residualUnit in enumerate(self.res_layers):
             x = residualUnit(x)
             skip += self.skip_layers[i + 1](x)
-            # skip = torch.cat([skip,self.skip_layers[i+1](x)],axis=1)
 
-        # x = skip[:,:,self.CL_max//2:-self.CL_max//2]
-        # x = self.conv_final(x)
-        # m = nn.Softmax(dim=1)
         return skip
 
 
@@ -426,7 +396,6 @@ class ResNet_40K(nn.Module):
         res_dilation = [1, 4, 10, 25, 75]
         self.kernel_size = 1
         self.exonInclusion = exonInclusion
-        # self.res_kernel_size = 11
         self.conv_layer_1 = nn.Conv1d(in_channels=4, out_channels=n_channels, kernel_size=self.kernel_size, stride=1)
         self.skip_layers = nn.ModuleList(
             [nn.Conv1d(in_channels=n_channels, out_channels=n_channels, kernel_size=self.kernel_size, stride=1) for i in
@@ -444,10 +413,7 @@ class ResNet_40K(nn.Module):
 
         for i, residualUnit in enumerate(self.res_layers):
             x = residualUnit(x)
-            # if i ==2:
-            #    x_2 = x
             skip += self.skip_layers[i + 1](x)
-            # skip = torch.cat([skip,self.skip_layers[i+1](x)],axis=1)
 
         x = skip[:, :, self.CL_max // 2:-self.CL_max // 2]
         m = nn.Softmax(dim=1)
