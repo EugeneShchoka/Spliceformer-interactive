@@ -77,8 +77,8 @@ def one_hot_encode(sequence):
 
     return one_hot_array
 
-def get_name_and_strand(self, chrom, pos):
 
+def get_name_and_strand(self, chrom, pos):
     chrom = normalise_chrom(chrom, list(self.chroms)[0])
     idxs = np.intersect1d(np.nonzero(self.chroms == chrom)[0],
                           np.intersect1d(np.nonzero(self.tx_starts <= pos)[0],
@@ -89,20 +89,20 @@ def get_name_and_strand(self, chrom, pos):
     else:
         return [], [], []
 
-def normalise_chrom(source, target):
 
+def normalise_chrom(source, target):
     def has_prefix(x):
         return x.startswith('chr')
 
     if has_prefix(source) and not has_prefix(target):
         return source.strip('chr')
     elif not has_prefix(source) and has_prefix(target):
-        return 'chr'+source
+        return 'chr' + source
 
     return source
 
-def get_pos_data(self, idx, pos):
 
+def get_pos_data(self, idx, pos):
     dist_tx_start = self.tx_starts[idx] - pos
     dist_tx_end = self.tx_ends[idx] - pos
     dist_exon_bdry = min(np.union1d(self.exon_starts[idx], self.exon_ends[idx]) - pos, key=abs)
@@ -110,8 +110,8 @@ def get_pos_data(self, idx, pos):
 
     return dist_ann
 
-def get_delta_scores(record, ann, dist_var, mask):
 
+def get_delta_scores(record, ann, dist_var, mask):
     cov = 2 * dist_var + 1
     wid = 10000 + cov
     delta_scores = []
@@ -221,14 +221,7 @@ def main():
     with VariantFile(args.input, "r") as vcf:
         fasta = Fasta(args.reference)
 
-        # Modify VCF header
-        header = vcf.header.copy()
-        header.add_line('##INFO=<ID=DS_AG,Number=1,Type=Float,Description="Delta score for acceptor gain">')
-        header.add_line('##INFO=<ID=DS_AL,Number=1,Type=Float,Description="Delta score for acceptor loss">')
-        header.add_line('##INFO=<ID=DS_DG,Number=1,Type=Float,Description="Delta score for donor gain">')
-        header.add_line('##INFO=<ID=DS_DL,Number=1,Type=Float,Description="Delta score for donor loss">')
-
-        with VariantFile(args.output, "w", header=header) as out:
+        with VariantFile(args.output, "w", header=vcf.header) as out:
             for record in vcf:
                 delta_scores = []
 
@@ -257,7 +250,7 @@ def main():
 
                 alt_number = len(alt)
                 for i in range(alt_number):
-                    alt_seq = ref_seq[:pos_start] + alt[i] + ref_seq[(pos_start + ref_len):]
+                    alt_seq = ref_seq[:pos_start] + alt[i] + ref_seq[(pos_start + len(alt[i]) - 1 + ref_len):]
 
                     alt_len = len(alt[i])
 
@@ -270,28 +263,22 @@ def main():
                     alt_prediction = torch.stack([model(alt_seq_tensor)[0].detach() for model in models]).mean(
                         dim=0).cpu().numpy()[0, :, :]
 
-                    # acceptor_delta, donor_delta = get_deltas(ref_prediction, alt_prediction, pos_start, CL_max // 2,
-                    #                                          ref_len, alt_len, ref_seq_len, alt_seq_len)
-                    #
-                    # delta_score = np.max(np.concatenate([acceptor_delta, donor_delta], axis=0))
-                    #
-                    # # Create a new VariantRecord object
-                    # record_out = VariantRecord(chrom.replace("chr", ""), pos, pos + len(alt[i]) - 1,
-                    #                                  [ref, alt[i]], quality=100, filter='PASS')
-                    #
-                    # # Add the DS_AG, DS_AL, DS_DG, and DS_DL INFO fields to the record_out object
-                    # record_out.info['DS_AG'] = [acceptor_delta[0]]
-                    # record_out.info['DS_AL'] = [acceptor_delta[1]]
-                    # record_out.info['DS_DG'] = [donor_delta[0]]
-                    # record_out.info['DS_DL'] = [donor_delta[1]]
-                    #
-                    # # Write the VariantRecord object to the output file
-                    # out.write(record_out)
+                    y = np.stack([ref_prediction, alt_prediction], axis=0)
 
-                    y = np.concatenate([ref_prediction, alt_prediction], axis=0)
+                    idx_pa = (y[1, 1, :] - y[0, 1, :]).argmax()
+                    idx_na = (y[0, :, 1] - y[1, :, 1]).argmax()
+                    idx_pd = (y[1, :, 2] - y[0, :, 2]).argmax()
+                    idx_nd = (y[0, :, 2] - y[1, :, 2]).argmax()
 
+                    DS_AG = (y[1, 1, idx_pa] - y[0, 1, idx_pa])
+                    DS_AL = (y[0, 1, idx_na] - y[1, 1, idx_na])
+                    DS_DG = (y[1, 2, idx_pd] - y[0, 2, idx_pd])
+                    DS_DL = (y[0, 2, idx_nd] - y[1, 2, idx_nd])
 
-
+                    DP_AG = idx_pa - cov // 2
+                    DP_AL = idx_na - cov // 2
+                    DP_DG = idx_pd - cov // 2
+                    DP_DL = idx_nd - cov // 2
 
 
 if __name__ == '__main__':

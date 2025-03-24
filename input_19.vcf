@@ -26,8 +26,6 @@
 ##contig=<ID=X,length=155270560>
 ##contig=<ID=Y,length=59373566>
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
-1	25000	.	A	C,G,T	.	.	.
-2	152389953	.	T	A,C,G	.	.	.
 2	179415988	.	C	CA	.	.	.
 2	179446218	.	ATACT	A	.	.	.
 2	179446218	.	ATACT	AT,ATA	.	.	.
@@ -36,3 +34,5 @@
 21	47406854	.	CCA	C	.	.	.
 21	47406856	.	A	AT	.	.	.
 X	129274636	.	A	C,G,T	.	.	.
+1	25000	.	A	C,G,T	.	.	.
+2	152389953	.	T	A,C,G	.	.	.
