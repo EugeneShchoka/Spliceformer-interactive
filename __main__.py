@@ -111,96 +111,50 @@ def get_pos_data(self, idx, pos):
     return dist_ann
 
 
-def get_delta_scores(record, ann, dist_var, mask):
-    cov = 2 * dist_var + 1
-    wid = 10000 + cov
-    delta_scores = []
+def get_deltas(ref_prediction, alt_prediction, pos_s, crop, ref_len, alt_len, ref_seq_len, alt_seq_len):
+    """
 
-    (genes, strands, idxs) = ann.get_name_and_strand(record.chrom, record.pos)
+    Args:
+      ref_prediction: Splice site scores for all nucleotides in the reference sequence
+      alt_prediction: Splice site scores for all nucleotides in the alternative sequence
+      pos_s: Variant position minus sequence start position
+      crop: Region to crop from both sides of the delta tracks
 
-    chrom = normalise_chrom(record.chrom, list(ann.ref_fasta.keys())[0])
+    Returns: Donor and acceptor delta tracks (difference between alt_prediction and ref_prediction)
 
-    seq = ann.ref_fasta[chrom][record.pos - wid // 2 - 1:record.pos + wid // 2].seq
+    """
+    ref_acceptor = ref_prediction[1, :]
+    alt_acceptor = alt_prediction[1, :]
+    ref_donor = ref_prediction[2, :]
+    alt_donor = alt_prediction[2, :]
 
-    if len(idxs) == 0:
-        return delta_scores
+    delta_1_a = alt_acceptor[:pos_s] - ref_acceptor[:pos_s]
+    delta_1_d = alt_donor[:pos_s] - ref_donor[:pos_s]
+    delta_3_a = alt_acceptor[pos_s + alt_len:] - ref_acceptor[pos_s + ref_len:]
+    delta_3_d = alt_donor[pos_s + alt_len:] - ref_donor[pos_s + ref_len:]
+    if ref_seq_len == alt_seq_len:
+        delta_2_a = alt_acceptor[pos_s:pos_s + ref_len] - ref_acceptor[pos_s:pos_s + ref_len]
+        delta_2_d = alt_donor[pos_s:pos_s + ref_len] - ref_donor[pos_s:pos_s + ref_len]
+    elif ref_seq_len > alt_seq_len:
+        a_pad = np.pad(alt_acceptor[pos_s:pos_s + alt_len], (0, ref_len - alt_len), 'constant', constant_values=0)
+        d_pad = np.pad(alt_donor[pos_s:pos_s + alt_len], (0, ref_len - alt_len), 'constant', constant_values=0)
+        delta_2_a = a_pad - ref_acceptor[pos_s:pos_s + ref_len]
+        delta_2_d = d_pad - ref_donor[pos_s:pos_s + ref_len]
 
-    for j in range(len(record.alts)):
-        for i in range(len(idxs)):
+    elif ref_seq_len < alt_seq_len:
+        a_pad = np.pad(ref_acceptor[pos_s:pos_s + ref_len], (0, alt_len - ref_len), 'constant', constant_values=0)
+        d_pad = np.pad(ref_donor[pos_s:pos_s + ref_len], (0, alt_len - ref_len), 'constant', constant_values=0)
+        delta_2_a = alt_acceptor[pos_s:pos_s + alt_len] - a_pad
+        delta_2_d = alt_donor[pos_s:pos_s + alt_len] - d_pad
 
-            dist_ann = get_pos_data(idxs[i], record.pos)
+        delta_2_a = np.append(delta_2_a[:ref_len - 1],
+                              delta_2_a[np.argmax(np.absolute(delta_2_a[ref_len - 1:alt_len]))])
+        delta_2_d = np.append(delta_2_d[:ref_len - 1],
+                              delta_2_d[np.argmax(np.absolute(delta_2_d[ref_len - 1:alt_len]))])
 
-            if '.' in record.alts[j] or '-' in record.alts[j] or '*' in record.alts[j]:
-                continue
-
-            if '<' in record.alts[j] or '>' in record.alts[j]:
-                continue
-
-            if len(record.ref) > 1 and len(record.alts[j]) > 1:
-                delta_scores.append("{}|{}|.|.|.|.|.|.|.|.".format(record.alts[j], genes[i]))
-                continue
-
-            dist_ann = ann.get_pos_data(idxs[i], record.pos)
-            pad_size = [max(wid // 2 + dist_ann[0], 0), max(wid // 2 - dist_ann[1], 0)]
-            ref_len = len(record.ref)
-            alt_len = len(record.alts[j])
-            del_len = max(ref_len - alt_len, 0)
-
-            x_ref = 'N' * pad_size[0] + seq[pad_size[0]:wid - pad_size[1]] + 'N' * pad_size[1]
-            x_alt = x_ref[:wid // 2] + str(record.alts[j]) + x_ref[wid // 2 + ref_len:]
-
-            x_ref = one_hot_encode(x_ref)[None, :]
-            x_alt = one_hot_encode(x_alt)[None, :]
-
-            if strands[i] == '-':
-                x_ref = x_ref[:, ::-1, ::-1]
-                x_alt = x_alt[:, ::-1, ::-1]
-
-            y_ref = np.mean([ann.models[m].predict(x_ref) for m in range(5)], axis=0)
-            y_alt = np.mean([ann.models[m].predict(x_alt) for m in range(5)], axis=0)
-
-            if strands[i] == '-':
-                y_ref = y_ref[:, ::-1]
-                y_alt = y_alt[:, ::-1]
-
-            if ref_len > 1 and alt_len == 1:
-                y_alt = np.concatenate([
-                    y_alt[:, :cov // 2 + alt_len],
-                    np.zeros((1, del_len, 3)),
-                    y_alt[:, cov // 2 + alt_len:]],
-                    axis=1)
-            elif ref_len == 1 and alt_len > 1:
-                y_alt = np.concatenate([
-                    y_alt[:, :cov // 2],
-                    np.max(y_alt[:, cov // 2:cov // 2 + alt_len], axis=1)[:, None, :],
-                    y_alt[:, cov // 2 + alt_len:]],
-                    axis=1)
-
-            y = np.concatenate([y_ref, y_alt])
-
-            idx_pa = (y[1, :, 1] - y[0, :, 1]).argmax()
-            idx_na = (y[0, :, 1] - y[1, :, 1]).argmax()
-            idx_pd = (y[1, :, 2] - y[0, :, 2]).argmax()
-            idx_nd = (y[0, :, 2] - y[1, :, 2]).argmax()
-
-            mask_pa = np.logical_and((idx_pa - cov // 2 == dist_ann[2]), mask)
-            mask_na = np.logical_and((idx_na - cov // 2 != dist_ann[2]), mask)
-            mask_pd = np.logical_and((idx_pd - cov // 2 == dist_ann[2]), mask)
-            mask_nd = np.logical_and((idx_nd - cov // 2 != dist_ann[2]), mask)
-
-            delta_scores.append("{}|{}|{:.2f}|{:.2f}|{:.2f}|{:.2f}|{}|{}|{}|{}".format(
-                record.alts[j],
-                genes[i],
-                (y[1, idx_pa, 1] - y[0, idx_pa, 1]) * (1 - mask_pa),
-                (y[0, idx_na, 1] - y[1, idx_na, 1]) * (1 - mask_na),
-                (y[1, idx_pd, 2] - y[0, idx_pd, 2]) * (1 - mask_pd),
-                (y[0, idx_nd, 2] - y[1, idx_nd, 2]) * (1 - mask_nd),
-                idx_pa - cov // 2,
-                idx_na - cov // 2,
-                idx_pd - cov // 2,
-                idx_nd - cov // 2))
-
-    return delta_scores
+    acceptorDelta = np.concatenate([delta_1_a, delta_2_a, delta_3_a])
+    donorDelta = np.concatenate([delta_1_d, delta_2_d, delta_3_d])
+    return acceptorDelta[crop:-crop], donorDelta[crop:-crop]
 
 
 def main():
@@ -208,11 +162,6 @@ def main():
 
     SL = 5000
     CL_max = 40000
-
-    # ???
-    dist_var = 50
-    mask = 0
-    cov = 2 * dist_var + 1
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -250,7 +199,7 @@ def main():
 
                 alt_number = len(alt)
                 for i in range(alt_number):
-                    alt_seq = ref_seq[:pos_start] + alt[i] + ref_seq[(pos_start + len(alt[i]) - 1 + ref_len):]
+                    alt_seq = ref_seq[:pos_start] + alt[i] + ref_seq[(pos_start + ref_len):]
 
                     alt_len = len(alt[i])
 
@@ -263,22 +212,37 @@ def main():
                     alt_prediction = torch.stack([model(alt_seq_tensor)[0].detach() for model in models]).mean(
                         dim=0).cpu().numpy()[0, :, :]
 
-                    y = np.stack([ref_prediction, alt_prediction], axis=0)
+                    acceptor_delta, donor_delta = get_deltas(ref_prediction, alt_prediction, pos_start, CL_max // 2,
+                                                             ref_len, alt_len, ref_seq_len, alt_seq_len)
 
-                    idx_pa = (y[1, 1, :] - y[0, 1, :]).argmax()
-                    idx_na = (y[0, :, 1] - y[1, :, 1]).argmax()
-                    idx_pd = (y[1, :, 2] - y[0, :, 2]).argmax()
-                    idx_nd = (y[0, :, 2] - y[1, :, 2]).argmax()
+                    if ref_len == alt_len:
+                        prediction = np.stack((ref_prediction, alt_prediction), axis=0)
+                    # elif ref_len > alt_len:
+                        #TODO
+                    # else:
+                        # TODO
 
-                    DS_AG = (y[1, 1, idx_pa] - y[0, 1, idx_pa])
-                    DS_AL = (y[0, 1, idx_na] - y[1, 1, idx_na])
-                    DS_DG = (y[1, 2, idx_pd] - y[0, 2, idx_pd])
-                    DS_DL = (y[0, 2, idx_nd] - y[1, 2, idx_nd])
+                    # acceptor
+                    idx_pa = (prediction[1, 1, :] - prediction[0, 1, :]).argmax()
+                    idx_na = (prediction[0, 1, :] - prediction[1, 1, :]).argmax()
 
-                    DP_AG = idx_pa - cov // 2
-                    DP_AL = idx_na - cov // 2
-                    DP_DG = idx_pd - cov // 2
-                    DP_DL = idx_nd - cov // 2
+                    # donor
+                    idx_pd = (prediction[1, 2, :] - prediction[0, 2, :]).argmax()
+                    idx_nd = (prediction[0, 2, :] - prediction[1, 2, :]).argmax()
+
+                    # delta score
+                    DS_AG = (prediction[1, 1, idx_pa] - prediction[0, 1, idx_pa])
+                    DS_AL = (prediction[0, 1, idx_na] - prediction[1, 1, idx_na])
+                    DS_DG = (prediction[1, 2, idx_pd] - prediction[0, 2, idx_pd])
+                    DS_DL = (prediction[0, 2, idx_nd] - prediction[1, 2, idx_nd])
+
+                    # delta position
+                    DP_AG = idx_pa - SL // 2 - CL_max // 2
+                    DP_AL = idx_na - SL // 2 - CL_max // 2
+                    DP_DG = idx_pd - SL // 2 - CL_max // 2
+                    DP_DL = idx_nd - SL // 2 - CL_max // 2
+
+                    a = 1
 
 
 if __name__ == '__main__':
