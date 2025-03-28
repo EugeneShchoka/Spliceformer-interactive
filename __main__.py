@@ -36,6 +36,12 @@ def get_options():
              'package), "grch38" (GENCODE V24 canonical annotation file in '
              'package), or path to a similar custom gene annotation file'
     )
+    parser.add_argument(
+        "-d", "--distance", nargs='?', default=50,
+        type=int, choices=(0, 5000),
+        help="distance between the variant and gained/lost splice"
+             "site, default is 50"
+    )
 
     args = parser.parse_args()
 
@@ -123,51 +129,50 @@ def get_pos_data(self, idx, pos):
     return dist_ann
 
 
-def get_deltas(ref_prediction, alt_prediction, pos_s, crop, ref_len, alt_len, ref_seq_len, alt_seq_len):
-    """
-
-    Args:
-      ref_prediction: Splice site scores for all nucleotides in the reference sequence
-      alt_prediction: Splice site scores for all nucleotides in the alternative sequence
-      pos_s: Variant position minus sequence start position
-      crop: Region to crop from both sides of the delta tracks
-
-    Returns: Donor and acceptor delta tracks (difference between alt_prediction and ref_prediction)
-
-    """
-    ref_acceptor = ref_prediction[1, :]
-    alt_acceptor = alt_prediction[1, :]
-    ref_donor = ref_prediction[2, :]
-    alt_donor = alt_prediction[2, :]
-
-    delta_1_a = alt_acceptor[:pos_s] - ref_acceptor[:pos_s]
-    delta_1_d = alt_donor[:pos_s] - ref_donor[:pos_s]
-    delta_3_a = alt_acceptor[pos_s + alt_len:] - ref_acceptor[pos_s + ref_len:]
-    delta_3_d = alt_donor[pos_s + alt_len:] - ref_donor[pos_s + ref_len:]
-    if ref_seq_len == alt_seq_len:
-        delta_2_a = alt_acceptor[pos_s:pos_s + ref_len] - ref_acceptor[pos_s:pos_s + ref_len]
-        delta_2_d = alt_donor[pos_s:pos_s + ref_len] - ref_donor[pos_s:pos_s + ref_len]
-    elif ref_seq_len > alt_seq_len:
-        a_pad = np.pad(alt_acceptor[pos_s:pos_s + alt_len], (0, ref_len - alt_len), 'constant', constant_values=0)
-        d_pad = np.pad(alt_donor[pos_s:pos_s + alt_len], (0, ref_len - alt_len), 'constant', constant_values=0)
-        delta_2_a = a_pad - ref_acceptor[pos_s:pos_s + ref_len]
-        delta_2_d = d_pad - ref_donor[pos_s:pos_s + ref_len]
-
-    elif ref_seq_len < alt_seq_len:
-        a_pad = np.pad(ref_acceptor[pos_s:pos_s + ref_len], (0, alt_len - ref_len), 'constant', constant_values=0)
-        d_pad = np.pad(ref_donor[pos_s:pos_s + ref_len], (0, alt_len - ref_len), 'constant', constant_values=0)
-        delta_2_a = alt_acceptor[pos_s:pos_s + alt_len] - a_pad
-        delta_2_d = alt_donor[pos_s:pos_s + alt_len] - d_pad
-
-        delta_2_a = np.append(delta_2_a[:ref_len - 1],
-                              delta_2_a[np.argmax(np.absolute(delta_2_a[ref_len - 1:alt_len]))])
-        delta_2_d = np.append(delta_2_d[:ref_len - 1],
-                              delta_2_d[np.argmax(np.absolute(delta_2_d[ref_len - 1:alt_len]))])
-
-    acceptorDelta = np.concatenate([delta_1_a, delta_2_a, delta_3_a])
-    donorDelta = np.concatenate([delta_1_d, delta_2_d, delta_3_d])
-    return acceptorDelta[crop:-crop], donorDelta[crop:-crop]
-
+# def get_deltas(ref_prediction, alt_prediction, pos_s, crop, ref_len, alt_len, ref_seq_len, alt_seq_len):
+#     """
+#
+#     Args:
+#       ref_prediction: Splice site scores for all nucleotides in the reference sequence
+#       alt_prediction: Splice site scores for all nucleotides in the alternative sequence
+#       pos_s: Variant position minus sequence start position
+#       crop: Region to crop from both sides of the delta tracks
+#
+#     Returns: Donor and acceptor delta tracks (difference between alt_prediction and ref_prediction)
+#
+#     """
+#     ref_acceptor = ref_prediction[1, :]
+#     alt_acceptor = alt_prediction[1, :]
+#     ref_donor = ref_prediction[2, :]
+#     alt_donor = alt_prediction[2, :]
+#
+#     delta_1_a = alt_acceptor[:pos_s] - ref_acceptor[:pos_s]
+#     delta_1_d = alt_donor[:pos_s] - ref_donor[:pos_s]
+#     delta_3_a = alt_acceptor[pos_s + alt_len:] - ref_acceptor[pos_s + ref_len:]
+#     delta_3_d = alt_donor[pos_s + alt_len:] - ref_donor[pos_s + ref_len:]
+#     if ref_seq_len == alt_seq_len:
+#         delta_2_a = alt_acceptor[pos_s:pos_s + ref_len] - ref_acceptor[pos_s:pos_s + ref_len]
+#         delta_2_d = alt_donor[pos_s:pos_s + ref_len] - ref_donor[pos_s:pos_s + ref_len]
+#     elif ref_seq_len > alt_seq_len:
+#         a_pad = np.pad(alt_acceptor[pos_s:pos_s + alt_len], (0, ref_len - alt_len), 'constant', constant_values=0)
+#         d_pad = np.pad(alt_donor[pos_s:pos_s + alt_len], (0, ref_len - alt_len), 'constant', constant_values=0)
+#         delta_2_a = a_pad - ref_acceptor[pos_s:pos_s + ref_len]
+#         delta_2_d = d_pad - ref_donor[pos_s:pos_s + ref_len]
+#
+#     elif ref_seq_len < alt_seq_len:
+#         a_pad = np.pad(ref_acceptor[pos_s:pos_s + ref_len], (0, alt_len - ref_len), 'constant', constant_values=0)
+#         d_pad = np.pad(ref_donor[pos_s:pos_s + ref_len], (0, alt_len - ref_len), 'constant', constant_values=0)
+#         delta_2_a = alt_acceptor[pos_s:pos_s + alt_len] - a_pad
+#         delta_2_d = alt_donor[pos_s:pos_s + alt_len] - d_pad
+#
+#         delta_2_a = np.append(delta_2_a[:ref_len - 1],
+#                               delta_2_a[np.argmax(np.absolute(delta_2_a[ref_len - 1:alt_len]))])
+#         delta_2_d = np.append(delta_2_d[:ref_len - 1],
+#                               delta_2_d[np.argmax(np.absolute(delta_2_d[ref_len - 1:alt_len]))])
+#
+#     acceptorDelta = np.concatenate([delta_1_a, delta_2_a, delta_3_a])
+#     donorDelta = np.concatenate([delta_1_d, delta_2_d, delta_3_d])
+#     return acceptorDelta[crop:-crop], donorDelta[crop:-crop]
 
 class Annotator:
 
@@ -227,13 +232,128 @@ class Annotator:
         return dist_ann
 
 
+def get_delta_scores(ann, record, models, SL, CL_max, device, fasta):
+    delta_score = []  # ???
+
+    chrom = record.chrom if record.chrom.startswith("chr") else f"chr{record.chrom}"
+    pos = record.pos
+    ref = record.ref
+    alts = [alt for alt in record.alts]
+
+    ref_fa = fasta[chrom][pos - 1:pos - 1 + len(ref)].seq
+
+    assert ref == ref_fa, f"Reference base mismatch at {chrom}:{pos} (expected {ref}, got {ref_fa})"
+
+    (genes, strands, idxs) = ann.get_name_and_strand(chrom, pos)
+
+    if len(idxs) == 0:
+        return delta_score  # add to sep function else closes a script
+
+    start, end = pos - SL // 2 - CL_max // 2, pos + SL // 2 + CL_max // 2  # mb + len-1
+    pos_start = pos - start
+    try:
+        ref_seq = fasta[chrom][start - 1:end - 1].seq.upper()
+    except (IndexError, ValueError):
+        logging.warning('Skipping record (fasta issue): {}'.format(record))
+        return delta_score
+    ref_len = len(ref)
+
+    ref_seq_len = len(ref_seq)
+
+    alt_number = len(alts)
+    for i in range(alt_number):
+        for j in range(len(idxs)):
+
+            if '.' in alts[i] or '-' in alts[i] or '*' in alts[i]:
+                continue
+
+            if '<' in alts[i] or '>' in alts[i]:
+                continue
+
+            if len(record.ref) > 1 and len(alts[i]) > 1:
+                delta_score.append("{}|{}|.|.|.|.|.|.|.|.".format(alts[i], genes[j]))
+                continue
+
+            alt_seq = ref_seq[:pos_start] + alts[i] + ref_seq[(pos_start + ref_len):]
+
+            alt_len = len(alts[i])
+
+            alt_seq_len = len(alt_seq)
+            if alt_seq_len > ref_seq_len:
+                alt_seq = alt_seq[:ref_seq_len]
+            elif alt_seq_len < ref_seq_len:
+                alt_seq = alt_seq + fasta[chrom][end - 1:end - 1 + ref_seq_len - alt_seq_len].seq.upper()
+
+            ref_seq_encoded = one_hot_encode(ref_seq)
+            alt_seq_encoded = one_hot_encode(alt_seq)
+
+            if strands[j] == '-':
+                ref_seq_encoded = ref_seq_encoded[::-1, ::-1]
+                alt_seq_encoded = alt_seq_encoded[::-1, ::-1]
+
+            # get predictions
+            ref_seq_tensor = torch.tensor(ref_seq_encoded.copy(), dtype=torch.float32).T.unsqueeze(0).to(
+                device)
+            alt_seq_tensor = torch.tensor(alt_seq_encoded.copy(), dtype=torch.float32).T.unsqueeze(0).to(
+                device)
+
+            ref_prediction = torch.stack([model(ref_seq_tensor)[0].detach() for model in models]).mean(
+                dim=0).cpu().numpy()[0, :, :]
+            alt_prediction = torch.stack([model(alt_seq_tensor)[0].detach() for model in models]).mean(
+                dim=0).cpu().numpy()[0, :, :]
+
+            if strands[j] == '-':
+                ref_prediction = ref_prediction[:, ::-1]
+                alt_prediction = alt_prediction[:, ::-1]
+
+            prediction = np.stack((ref_prediction, alt_prediction), axis=0)
+
+            prediction_cropped = prediction[:, :, CL_max // 2:-CL_max // 2]
+
+            # acceptor
+            idx_pa = (prediction_cropped[1, 1, :] - prediction_cropped[0, 1, :]).argmax()
+            idx_na = (prediction_cropped[0, 1, :] - prediction_cropped[1, 1, :]).argmax()
+            # donor
+            idx_pd = (prediction_cropped[1, 2, :] - prediction_cropped[0, 2, :]).argmax()
+            idx_nd = (prediction_cropped[0, 2, :] - prediction_cropped[1, 2, :]).argmax()
+
+            Gene_name = genes[j]
+            Alt_base = alts[i]
+
+            # delta score
+            DS_AG = (prediction_cropped[1, 1, idx_pa] - prediction_cropped[0, 1, idx_pa])
+            DS_AL = (prediction_cropped[0, 1, idx_na] - prediction_cropped[1, 1, idx_na])
+            DS_DG = (prediction_cropped[1, 2, idx_pd] - prediction_cropped[0, 2, idx_pd])
+            DS_DL = (prediction_cropped[0, 2, idx_nd] - prediction_cropped[1, 2, idx_nd])
+
+            # delta position
+            # DP_AG = idx_pa - SL // 2 - CL_max // 2
+            # DP_AL = idx_na - SL // 2 - CL_max // 2
+            # DP_DG = idx_pd - SL // 2 - CL_max // 2
+            # DP_DL = idx_nd - SL // 2 - CL_max // 2
+
+            DP_AG = idx_pa - SL // 2
+            DP_AL = idx_na - SL // 2
+            DP_DG = idx_pd - SL // 2
+            DP_DL = idx_nd - SL // 2
+
+            delta_score.append("{}|{}|{:.2f}|{:.2f}|{:.2f}|{:.2f}|{}|{}|{}|{}".format(
+                Alt_base,
+                Gene_name,
+                DS_AG, DS_AL, DS_DG, DS_DL,
+                DP_AG, DP_AL, DP_DG, DP_DL
+            ))
+
+    return delta_score
+
+
 def main():
     args = get_options()
 
-    SL = 5000
-    SL_SpliceAI = 100
-    CL_max = 40000
-    CL_max_SpliceAI = 44900
+    variant_dist = args.distance
+
+    SL = variant_dist * 2
+    CL_max = 50000 - SL
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -243,101 +363,36 @@ def main():
 
     fasta = ann.ref_fasta
 
-    with VariantFile(args.input, "r") as vcf:
-        with VariantFile(args.output, "w", header=vcf.header) as out:
-            header = vcf.header
+    try:
+        vcf = VariantFile(args.input)
+    except (IOError, ValueError) as e:
+        logging.error('{}'.format(e))
+        exit()
 
-            header.add_line('##INFO=<ID=Spliceformer,Number=.,Type=String,Description="Spliceformer v1.0.0 custom '
-                            'annotation. These include delta scores (DS) and delta positions (DP) for '
-                            'acceptor gain (AG), acceptor loss (AL), donor gain (DG), and donor loss (DL). '
-                            'Format: SYMBOL|DS_AG|DS_AL|DS_DG|DS_DL|DP_AG|DP_AL|DP_DG|DP_DL">')
+    header = vcf.header
 
-            for record in vcf:
-                delta_scores = []  # ???
+    header.add_line('##INFO=<ID=Spliceformer,Number=.,Type=String,Description="Spliceformer v1.0.0_custom '
+                    'variant annotation. These include delta scores (DS) and delta positions (DP) for '
+                    'acceptor gain (AG), acceptor loss (AL), donor gain (DG), and donor loss (DL). '
+                    'Format: ALLELE|SYMBOL|DS_AG|DS_AL|DS_DG|DS_DL|DP_AG|DP_AL|DP_DG|DP_DL">')
 
-                chrom = record.chrom if record.chrom.startswith("chr") else f"chr{record.chrom}"
-                pos = record.pos
-                ref = record.ref
-                alt = [alt for alt in record.alts]
+    try:
+        output = VariantFile(args.output, mode='w', header=header)
+    except (IOError, ValueError) as e:
+        logging.error('{}'.format(e))
+        exit()
 
-                ref_fa = fasta[chrom][pos - 1:pos - 1 + len(ref)].seq
+    for record in vcf:
 
-                assert ref == ref_fa, f"Reference base mismatch at {chrom}:{pos} (expected {ref}, got {ref_fa})"
+        info = get_delta_scores(ann, record, models, SL, CL_max, device, fasta)
 
-                (genes, strands, idxs) = ann.get_name_and_strand(chrom, pos)
+        if len(info) > 0:
+            record.info['Spliceformer'] = info
 
-                # if len(idxs) == 0:
-                #     return delta_scores  # add to sep function else closes a script
+        output.write(record)
 
-                start, end = pos - SL // 2 - CL_max // 2, pos + SL // 2 + CL_max // 2  # mb + len-1
-                pos_start = pos - start
-                ref_seq = fasta[chrom][start - 1:end - 1].seq.upper()
-                ref_len = len(ref)
-
-                ref_seq_len = len(ref_seq)
-
-                alt_number = len(alt)
-                for i in range(alt_number):
-                    for i in range(len(idxs)):
-                        alt_seq = ref_seq[:pos_start] + alt[i] + ref_seq[(pos_start + ref_len):]
-
-                        alt_len = len(alt[i])
-
-                        alt_seq_len = len(alt_seq)
-                        if alt_seq_len > ref_seq_len:
-                            alt_seq = alt_seq[:ref_seq_len]
-                        elif alt_seq_len < ref_seq_len:
-                            alt_seq = alt_seq + fasta[chrom][end - 1:end - 1 + ref_seq_len - alt_seq_len].seq.upper()
-
-                        ref_seq_encoded = one_hot_encode(ref_seq)
-                        alt_seq_encoded = one_hot_encode(alt_seq)
-
-                        if strands[i] == '-':
-                            ref_seq_encoded = ref_seq_encoded[::-1, ::-1]
-                            alt_seq_encoded = alt_seq_encoded[::-1, ::-1]
-
-                        # get predictions
-                        ref_seq_tensor = torch.tensor(ref_seq_encoded.copy(), dtype=torch.float32).T.unsqueeze(0).to(device)
-                        alt_seq_tensor = torch.tensor(alt_seq_encoded.copy(), dtype=torch.float32).T.unsqueeze(0).to(device)
-
-                        ref_prediction = torch.stack([model(ref_seq_tensor)[0].detach() for model in models]).mean(
-                            dim=0).cpu().numpy()[0, :, :]
-                        alt_prediction = torch.stack([model(alt_seq_tensor)[0].detach() for model in models]).mean(
-                            dim=0).cpu().numpy()[0, :, :]
-
-                        if strands[i] == '-':
-                            ref_prediction = ref_prediction[:, ::-1]
-                            alt_prediction = alt_prediction[:, ::-1]
-
-                        prediction = np.stack((ref_prediction, alt_prediction), axis=0)
-
-                        prediction_cropped = prediction[:, :, CL_max_SpliceAI // 2:-CL_max_SpliceAI // 2]
-
-                        # acceptor
-                        idx_pa = (prediction_cropped[1, 1, :] - prediction_cropped[0, 1, :]).argmax()
-                        idx_na = (prediction_cropped[0, 1, :] - prediction_cropped[1, 1, :]).argmax()
-                        # donor
-                        idx_pd = (prediction_cropped[1, 2, :] - prediction_cropped[0, 2, :]).argmax()
-                        idx_nd = (prediction_cropped[0, 2, :] - prediction_cropped[1, 2, :]).argmax()
-
-                        # delta score
-                        DS_AG = (prediction_cropped[1, 1, idx_pa] - prediction_cropped[0, 1, idx_pa])
-                        DS_AL = (prediction_cropped[0, 1, idx_na] - prediction_cropped[1, 1, idx_na])
-                        DS_DG = (prediction_cropped[1, 2, idx_pd] - prediction_cropped[0, 2, idx_pd])
-                        DS_DL = (prediction_cropped[0, 2, idx_nd] - prediction_cropped[1, 2, idx_nd])
-
-                        # delta position
-                        # DP_AG = idx_pa - SL // 2 - CL_max // 2
-                        # DP_AL = idx_na - SL // 2 - CL_max // 2
-                        # DP_DG = idx_pd - SL // 2 - CL_max // 2
-                        # DP_DL = idx_nd - SL // 2 - CL_max // 2
-
-                        DP_AG = idx_pa - SL_SpliceAI // 2
-                        DP_AL = idx_na - SL_SpliceAI // 2
-                        DP_DG = idx_pd - SL_SpliceAI // 2
-                        DP_DL = idx_nd - SL_SpliceAI // 2
-
-                        a = 1  # for debugging
+    vcf.close()
+    output.close()
 
 
 if __name__ == '__main__':
