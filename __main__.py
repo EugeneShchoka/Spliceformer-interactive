@@ -1,4 +1,5 @@
 from pkg_resources import resource_filename
+import os
 
 import pandas as pd
 
@@ -60,11 +61,12 @@ def load_model(CL_max, device):
 
     # This for loop is necessary when loading the weights to a single GPU
     for i, model in enumerate(models):
-        state_dict = torch.load(
-            './PyTorch_Models/transformer_encoder_40k_finetune_rnasplice-blood_all_050623_{}'.format(i),
-            map_location=device
-        )
-        #TODO add non-rlative path support
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(current_dir, 'PyTorch_Models',
+                                 'transformer_encoder_40k_finetune_rnasplice-blood_all_050623_{}'.format(i))
+
+        state_dict = torch.load(file_path, map_location=device)
+
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
             name = k[7:]  # remove `module.`
