@@ -64,6 +64,7 @@ def load_model(CL_max, device):
             './PyTorch_Models/transformer_encoder_40k_finetune_rnasplice-blood_all_050623_{}'.format(i),
             map_location=device
         )
+        #TODO add non-rlative path support
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
             name = k[7:]  # remove `module.`
